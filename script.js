@@ -15,11 +15,22 @@ let songs = [
     {songName: "Le Le Ram Ram", filePath: "songs/3.mp3", coverPath: "covers/3.jpg"},
     {songName: "Haule Haule", filePath: "songs/4.mp3", coverPath: "covers/4.jpg"},
     {songName: "Salaam Aaya", filePath: "songs/5.mp3", coverPath: "covers/5.jpg"},
-    {songName: "Ambersariya", filePath: "songs/2.mp3", coverPath: "covers/6.jpg"},
-    {songName: "O re piya", filePath: "songs/2.mp3", coverPath: "covers/7.jpg"},
-    {songName: "Kya Loge Tum", filePath: "songs/2.mp3", coverPath: "covers/8.jpg"},
-    {songName: "Husna", filePath: "songs/2.mp3", coverPath: "covers/9.jpg"},
-    {songName: "Luv Letter", filePath: "songs/4.mp3", coverPath: "covers/10.jpg"},
+    {songName: "Ambersariya", filePath: "songs/6.mp3", coverPath: "covers/6.jpg"},
+    {songName: "O re piya", filePath: "songs/7.mp3", coverPath: "covers/7.jpg"},
+    {songName: "Kya Loge Tum", filePath: "songs/8.mp3", coverPath: "covers/8.jpg"},
+    {songName: "Husna", filePath: "songs/9.mp3", coverPath: "covers/9.jpg"},
+    {songName: "Luv Letter", filePath: "songs/10.mp3", coverPath: "covers/9.jpg"},
+    {songName: "Bhare Naina Ra One", filePath: "songs/11.mp3", coverPath: "covers/10.jpg"},
+    {songName: "Devil Eyes", filePath: "songs/12.mp3", coverPath: "covers/10.jpg"},
+    {songName: "Haryane Ka Jaat", filePath: "songs/13.mp3", coverPath: "covers/10.jpg"},
+    {songName: "Hornn Blow ", filePath: "songs/14.mp3", coverPath: "covers/10.jpg"},
+    {songName: "Moti Chain", filePath: "songs/15.mp3", coverPath: "covers/10.jpg"},
+    {songName: "Paisa Hai Toh", filePath: "songs/16.mp3", coverPath: "covers/10.jpg"},
+    {songName: "Piya Ghar Aavenge", filePath: "songs/17.mp3", coverPath: "covers/10.jpg"},
+    {songName: "Psycho Saiyaan Saaho", filePath: "songs/18.mp3", coverPath: "covers/10.jpg"},
+    {songName: "Smack That", filePath: "songs/19.mp3", coverPath: "covers/10.jpg"},
+    {songName: "Summertime Sadness", filePath: "songs/21.mp3", coverPath: "covers/10.jpg"},
+    {songName: "Wakhra Swag", filePath: "songs/21.mp3", coverPath: "covers/10.jpg"},
 ]
 
 songItems.forEach((element, i)=>{ 
@@ -78,7 +89,7 @@ Array.from(document.getElementsByClassName('songItemPlay')).forEach((element)=>{
 })
 
 document.getElementById('next').addEventListener('click', ()=>{
-    if(songIndex>=9){
+    if(songIndex>=21){
         songIndex = 0
     }
     else{
