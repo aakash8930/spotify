@@ -2,10 +2,23 @@
 
 import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import {
+  Check,
+  Copy,
+  Pause,
+  Play,
+  Search,
+  Send,
+  SkipForward,
+  Users,
+  X,
+} from 'lucide-react';
 import type { Track } from '@resonate/shared/tracks';
 import { apiGet } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
+import { Button } from '@/components/ui/button';
 import { computeLivePosition, useRoom } from '@/lib/room-store';
+import { cn, fmtTime } from '@/lib/utils';
 
 // Drift threshold in seconds. Below this we let local playback continue —
 // re-seeking constantly causes audible glitches. Above this we snap to the
@@ -50,11 +63,10 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     (async () => {
       try {
         const upper = code.toUpperCase();
-        // Fetch chat history first (REST) so users see prior messages
-        // immediately on join. Without this the chat looks empty until
-        // someone sends the first message after they joined.
         const meta = await apiGet<{ room: { id: string } }>(`/api/rooms/by-code/${upper}`);
-        const history = await apiGet<{ messages: ChatMsg[] }>(`/api/rooms/${meta.room.id}/messages`);
+        const history = await apiGet<{ messages: ChatMsg[] }>(
+          `/api/rooms/${meta.room.id}/messages`,
+        );
         if (cancelled) return;
         await join(upper, history.messages);
       } catch (e) {
@@ -71,12 +83,11 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   if (!user)
     return (
       <Centered>
-        <p className="text-sm text-[var(--color-muted)]">You need an account to join a room.</p>
-        <Link
-          href={`/login`}
-          className="mt-4 rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-medium text-black"
-        >
-          Log in
+        <p className="text-sm text-[var(--color-text-muted)]">
+          You need an account to join a room.
+        </p>
+        <Link href="/login" className="mt-4">
+          <Button variant="primary">Log in</Button>
         </Link>
       </Centered>
     );
@@ -86,22 +97,40 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   const isHost = members.some((m) => m.userId === user.id && m.isHost);
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8 md:px-6">
+    <main className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
       <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <span className="text-xs uppercase tracking-wider text-[var(--color-muted)]">Room</span>
-          <h1 className="text-3xl font-bold tracking-tight">{room.name}</h1>
-        </div>
         <div className="flex items-center gap-3">
+          <Link
+            href="/rooms"
+            className="grid size-9 place-items-center rounded-full text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]"
+            aria-label="Back to rooms"
+          >
+            <X size={16} />
+          </Link>
+          <div>
+            <span className="text-xs uppercase tracking-wider text-[var(--color-text-subtle)]">
+              Room
+            </span>
+            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">{room.name}</h1>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
           <CodeChip code={room.code} />
-          <span className="text-xs text-[var(--color-muted)]">{members.length} listening</span>
-          {error && <span className="text-xs text-red-400">{error}</span>}
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs text-[var(--color-text-muted)]">
+            <Users size={12} />
+            {members.length}
+          </span>
+          {error && (
+            <span className="rounded-md bg-[var(--color-danger)]/10 px-2 py-1 text-xs text-[var(--color-danger)]">
+              {error}
+            </span>
+          )}
         </div>
       </header>
 
       <NowPlaying isHost={isHost} />
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_360px]">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
           <Queue isHost={isHost} />
           <AddTracks isHost={isHost} />
@@ -131,9 +160,20 @@ function CodeChip({ code }: { code: string }) {
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
       }}
-      className="rounded-full border border-[var(--color-border)] px-3 py-1 font-mono text-sm tracking-widest hover:bg-[var(--color-surface-2)]"
+      className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 font-mono text-sm tracking-widest hover:bg-[var(--color-surface-2)]"
+      aria-label="Copy room code"
     >
-      {copied ? 'copied' : code}
+      {copied ? (
+        <>
+          <Check size={12} className="text-[var(--color-accent)]" />
+          copied
+        </>
+      ) : (
+        <>
+          {code}
+          <Copy size={12} className="text-[var(--color-text-subtle)]" />
+        </>
+      )}
     </button>
   );
 }
@@ -149,10 +189,6 @@ function NowPlaying({ isHost }: { isHost: boolean }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [livePos, setLivePos] = useState(0);
 
-  // Sync local <audio> to server-authoritative state. We re-seek only when
-  // drift exceeds the threshold so that healthy playback isn't constantly
-  // glitching. The server's anchor + clock-offset gives us the canonical
-  // playhead.
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
@@ -164,7 +200,6 @@ function NowPlaying({ isHost }: { isHost: boolean }) {
     }
     if (el.src !== playback.current.audioUrl) {
       el.src = playback.current.audioUrl;
-      // New track: align immediately, no drift threshold.
       el.currentTime = computeLivePosition(playback, offset);
     }
 
@@ -175,17 +210,13 @@ function NowPlaying({ isHost }: { isHost: boolean }) {
 
     if (playback.isPlaying) {
       el.play().catch(() => {
-        // Browsers block autoplay until first interaction; the play button
-        // below gives the user a way to unblock it. The state stays correct
-        // server-side, we just won't make sound until they click.
+        // Browsers block autoplay until first interaction.
       });
     } else {
       el.pause();
     }
   }, [playback, offset]);
 
-  // Drive a smooth progress bar locally — recompute every 250ms instead of
-  // waiting for server emits.
   useEffect(() => {
     const t = setInterval(() => setLivePos(computeLivePosition(playback, offset)), 250);
     return () => clearInterval(t);
@@ -196,80 +227,114 @@ function NowPlaying({ isHost }: { isHost: boolean }) {
   const pct = dur ? Math.min(100, (livePos / dur) * 100) : 0;
 
   return (
-    <section className="mt-8 flex flex-col items-center gap-6 rounded-3xl border border-[var(--color-border)] bg-gradient-to-br from-[var(--color-surface)] to-[var(--color-surface-2)] p-6 md:flex-row md:items-end md:p-8">
-      {t?.coverUrl ? (
-        <img src={t.coverUrl} alt="" className="size-44 shrink-0 rounded-2xl object-cover shadow-2xl" />
-      ) : (
-        <div className="grid size-44 shrink-0 place-items-center rounded-2xl bg-[var(--color-surface-2)] text-4xl">
-          ♪
-        </div>
-      )}
-      <div className="min-w-0 flex-1 text-center md:text-left">
-        <div className="text-xs uppercase tracking-wider text-[var(--color-muted)]">
-          {playback.isPlaying ? 'Playing now' : t ? 'Paused' : 'Nothing playing'}
-        </div>
-        <div className="mt-1 truncate text-2xl font-bold">{t?.title ?? 'Queue is empty'}</div>
-        <div className="truncate text-sm text-[var(--color-muted)]">
-          {t?.artist ?? 'Add a track from below to start the room'}
-        </div>
-
-        <div
-          role={isHost ? 'slider' : undefined}
-          aria-valuemin={0}
-          aria-valuemax={dur}
-          aria-valuenow={Math.floor(livePos)}
-          onClick={(e) => {
-            if (!isHost || !t) return;
-            const r = e.currentTarget.getBoundingClientRect();
-            const ratio = (e.clientX - r.left) / r.width;
-            hostSeek(ratio * dur);
-          }}
-          className={`mt-6 h-1.5 overflow-hidden rounded-full bg-[var(--color-surface-2)] ${
-            isHost && t ? 'cursor-pointer' : ''
-          }`}
-        >
+    <section className="mt-6 overflow-hidden rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
+      <div className="relative">
+        {/* Soft gradient backdrop. When the cover loads it bleeds through
+            the blurred copy in the background. */}
+        {t?.coverUrl && (
           <div
-            className="h-full bg-[var(--color-accent)] transition-all"
-            style={{ width: `${pct}%` }}
+            aria-hidden
+            className="absolute inset-0 -z-10 opacity-60"
+            style={{
+              backgroundImage: `url(${t.coverUrl})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              filter: 'blur(80px) saturate(1.4)',
+              transform: 'scale(1.4)',
+            }}
           />
-        </div>
-        <div className="mt-1 flex justify-between text-xs tabular-nums text-[var(--color-muted)]">
-          <span>{fmt(livePos)}</span>
-          <span>{fmt(dur)}</span>
-        </div>
+        )}
+        <div className="absolute inset-0 -z-10 bg-gradient-to-br from-[var(--color-surface)]/85 to-[var(--color-surface)]/95" />
 
-        <div className="mt-4 flex items-center justify-center gap-2 md:justify-start">
-          {isHost ? (
-            <>
-              <button
-                type="button"
-                onClick={() => (playback.isPlaying ? hostPause() : hostPlay())}
-                disabled={!t}
-                className="grid size-12 place-items-center rounded-full bg-[var(--color-accent)] text-black transition hover:scale-105 disabled:opacity-50"
-              >
-                {playback.isPlaying ? '❚❚' : '▶'}
-              </button>
-              <button
-                type="button"
-                onClick={() => next()}
-                disabled={playback.queue.length === 0}
-                className="rounded-full border border-[var(--color-border)] px-4 py-2 text-sm hover:bg-[var(--color-surface-2)] disabled:opacity-40"
-              >
-                Skip
-              </button>
-            </>
+        <div className="flex flex-col items-center gap-6 p-6 md:flex-row md:items-end md:p-8">
+          {t?.coverUrl ? (
+            <img
+              src={t.coverUrl}
+              alt=""
+              className="size-44 shrink-0 rounded-2xl object-cover shadow-[var(--shadow-elevated)]"
+            />
           ) : (
-            <p className="text-xs text-[var(--color-muted)]">Only the host controls playback.</p>
+            <div className="grid size-44 shrink-0 place-items-center rounded-2xl bg-[var(--color-surface-2)] text-4xl text-[var(--color-text-subtle)]">
+              ♪
+            </div>
           )}
+          <div className="min-w-0 flex-1 text-center md:text-left">
+            <div className="text-xs uppercase tracking-wider text-[var(--color-text-muted)]">
+              {playback.isPlaying ? 'Playing now' : t ? 'Paused' : 'Nothing playing'}
+            </div>
+            <div className="mt-1 truncate text-2xl font-bold md:text-3xl">
+              {t?.title ?? 'Queue is empty'}
+            </div>
+            <div className="truncate text-sm text-[var(--color-text-muted)]">
+              {t?.artist ?? 'Add a track from below to start the room'}
+            </div>
+
+            <div
+              role={isHost ? 'slider' : undefined}
+              aria-valuemin={0}
+              aria-valuemax={dur}
+              aria-valuenow={Math.floor(livePos)}
+              onClick={(e) => {
+                if (!isHost || !t) return;
+                const r = e.currentTarget.getBoundingClientRect();
+                const ratio = (e.clientX - r.left) / r.width;
+                hostSeek(ratio * dur);
+              }}
+              className={cn(
+                'mt-6 h-1.5 overflow-hidden rounded-full bg-[var(--color-surface-3)]',
+                isHost && t && 'cursor-pointer',
+              )}
+            >
+              <div
+                className="h-full rounded-full bg-[var(--color-text)] transition-all"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <div className="mt-1 flex justify-between text-[11px] tabular-nums text-[var(--color-text-muted)]">
+              <span>{fmtTime(livePos)}</span>
+              <span>{fmtTime(dur)}</span>
+            </div>
+
+            <div className="mt-5 flex items-center justify-center gap-2 md:justify-start">
+              {isHost ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => (playback.isPlaying ? hostPause() : hostPlay())}
+                    disabled={!t}
+                    aria-label={playback.isPlaying ? 'Pause' : 'Play'}
+                    className="grid size-12 place-items-center rounded-full bg-[var(--color-text)] text-[var(--color-bg)] transition hover:scale-105 active:scale-95 disabled:opacity-40"
+                  >
+                    {playback.isPlaying ? (
+                      <Pause size={20} className="fill-current" />
+                    ) : (
+                      <Play size={20} className="ml-0.5 fill-current" />
+                    )}
+                  </button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => next()}
+                    disabled={playback.queue.length === 0}
+                    className="gap-1.5"
+                  >
+                    <SkipForward size={14} />
+                    Skip
+                  </Button>
+                </>
+              ) : (
+                <p className="text-xs text-[var(--color-text-muted)]">
+                  Only the host controls playback.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
       <audio
         ref={audioRef}
         onEnded={() => {
-          // Only the host's tab tells the server the track ended. We can't
-          // distinguish host from non-host on the server side without state,
-          // so the gateway gates this with withHostState.
           if (isHost) trackEnded();
         }}
       />
@@ -284,46 +349,49 @@ function Queue({ isHost }: { isHost: boolean }) {
 
   return (
     <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-      <h2 className="px-2 text-sm font-medium uppercase tracking-wider text-[var(--color-muted)]">
+      <h2 className="px-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-text-subtle)]">
         Up next ({playback.queue.length})
       </h2>
       {playback.queue.length === 0 ? (
-        <p className="px-2 py-6 text-sm text-[var(--color-muted)]">
+        <p className="px-2 py-6 text-sm text-[var(--color-text-muted)]">
           Queue is empty. Add tracks from the search below.
         </p>
       ) : (
-        <ul className="mt-2 space-y-1">
+        <ul className="mt-2 space-y-0.5">
           {playback.queue.map((t, i) => (
             <li
               key={t.id}
-              className="flex items-center gap-3 rounded-lg p-2 hover:bg-[var(--color-surface-2)]"
+              className="group flex items-center gap-3 rounded-lg p-2 hover:bg-[var(--color-surface-2)]"
             >
-              <span className="w-6 text-center text-sm text-[var(--color-muted)]">{i + 1}</span>
+              <span className="w-6 text-center text-xs tabular-nums text-[var(--color-text-subtle)]">
+                {i + 1}
+              </span>
               {t.coverUrl ? (
                 <img src={t.coverUrl} alt="" className="size-10 rounded object-cover" />
               ) : (
-                <div className="size-10 rounded bg-[var(--color-surface-2)]" />
+                <div className="size-10 rounded bg-[var(--color-surface-3)]" />
               )}
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">{t.title}</div>
-                <div className="truncate text-xs text-[var(--color-muted)]">{t.artist}</div>
+                <div className="truncate text-xs text-[var(--color-text-muted)]">{t.artist}</div>
               </div>
               {isHost && (
                 <>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setTrack(t)}
-                    className="rounded-full border border-[var(--color-border)] px-3 py-1 text-xs hover:bg-[var(--color-surface)]"
+                    className="opacity-0 group-hover:opacity-100"
                   >
                     Play now
-                  </button>
+                  </Button>
                   <button
                     type="button"
                     onClick={() => removeFromQueue(t.id)}
                     aria-label="Remove from queue"
-                    className="text-[var(--color-muted)] hover:text-red-400"
+                    className="grid size-7 place-items-center rounded-full text-[var(--color-text-muted)] opacity-0 transition hover:bg-[var(--color-surface-3)] hover:text-[var(--color-danger)] group-hover:opacity-100"
                   >
-                    ✕
+                    <X size={14} />
                   </button>
                 </>
               )}
@@ -372,48 +440,50 @@ function AddTracks({ isHost }: { isHost: boolean }) {
 
   return (
     <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-      <h2 className="px-2 text-sm font-medium uppercase tracking-wider text-[var(--color-muted)]">
+      <h2 className="px-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-text-subtle)]">
         Add tracks
       </h2>
-      <input
-        placeholder="Search for something to play…"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        className="mt-2 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 py-2"
-      />
-      <div className="mt-3 max-h-72 space-y-1 overflow-y-auto">
+      <div className="relative mt-2">
+        <Search
+          size={16}
+          className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--color-text-subtle)]"
+        />
+        <input
+          placeholder="Search for something to play…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] py-2 pl-10 pr-4 text-sm outline-none focus:border-[var(--color-accent)]"
+        />
+      </div>
+      <div className="mt-3 max-h-80 space-y-0.5 overflow-y-auto">
         {loading && results.length === 0 && (
-          <p className="py-4 text-center text-sm text-[var(--color-muted)]">Searching…</p>
+          <p className="py-4 text-center text-sm text-[var(--color-text-muted)]">Searching…</p>
         )}
         {results.map((t) => (
           <div
             key={t.id}
-            className="flex items-center gap-3 rounded-lg p-2 hover:bg-[var(--color-surface-2)]"
+            className="group flex items-center gap-3 rounded-lg p-2 hover:bg-[var(--color-surface-2)]"
           >
             {t.coverUrl ? (
               <img src={t.coverUrl} alt="" className="size-10 rounded object-cover" />
             ) : (
-              <div className="size-10 rounded bg-[var(--color-surface-2)]" />
+              <div className="size-10 rounded bg-[var(--color-surface-3)]" />
             )}
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium">{t.title}</div>
-              <div className="truncate text-xs text-[var(--color-muted)]">{t.artist}</div>
+              <div className="truncate text-xs text-[var(--color-text-muted)]">{t.artist}</div>
             </div>
-            <button
-              type="button"
-              onClick={() => enqueue(t)}
-              className="rounded-full border border-[var(--color-border)] px-3 py-1 text-xs hover:bg-[var(--color-surface)]"
-            >
+            <Button variant="ghost" size="sm" onClick={() => enqueue(t)}>
               Queue
-            </button>
+            </Button>
             {isHost && (
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => (playback.current ? enqueue(t) : setTrack(t))}
-                className="rounded-full bg-[var(--color-accent)] px-3 py-1 text-xs font-medium text-black"
               >
-                {playback.current ? '+' : 'Play'}
-              </button>
+                {playback.current ? 'Add' : 'Play'}
+              </Button>
             )}
           </div>
         ))}
@@ -426,21 +496,21 @@ function Members({ hostId }: { hostId: string }) {
   const members = useRoom((s) => s.members);
   return (
     <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-      <h2 className="px-2 text-sm font-medium uppercase tracking-wider text-[var(--color-muted)]">
+      <h2 className="px-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-text-subtle)]">
         Listening ({members.length})
       </h2>
-      <ul className="mt-2 space-y-1">
+      <ul className="mt-2 space-y-0.5">
         {members.map((m) => (
           <li
             key={m.userId}
             className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm"
           >
-            <div className="grid size-7 place-items-center rounded-full bg-[var(--color-surface-2)] text-xs">
+            <div className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-2)] text-xs font-semibold text-[var(--color-accent-fg)]">
               {(m.displayName ?? m.username).slice(0, 1).toUpperCase()}
             </div>
-            <span className="truncate">{m.displayName ?? m.username}</span>
+            <span className="min-w-0 truncate">{m.displayName ?? m.username}</span>
             {m.userId === hostId && (
-              <span className="ml-auto rounded-full bg-[var(--color-accent)]/20 px-2 py-0.5 text-xs text-[var(--color-accent)]">
+              <span className="ml-auto rounded-full bg-[var(--color-accent)]/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--color-accent)]">
                 host
               </span>
             )}
@@ -472,17 +542,19 @@ function Chat() {
 
   return (
     <section className="flex h-[420px] flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-      <h2 className="px-2 text-sm font-medium uppercase tracking-wider text-[var(--color-muted)]">
+      <h2 className="px-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-text-subtle)]">
         Chat
       </h2>
-      <div ref={scrollRef} className="mt-2 flex-1 space-y-2 overflow-y-auto px-2">
+      <div ref={scrollRef} className="mt-2 flex-1 space-y-2 overflow-y-auto px-2 py-1">
         {chat.length === 0 && (
-          <p className="py-6 text-center text-sm text-[var(--color-muted)]">Say hi.</p>
+          <p className="py-6 text-center text-sm text-[var(--color-text-muted)]">
+            Say hi.
+          </p>
         )}
         {chat.map((m) => (
-          <div key={m.id} className="text-sm">
+          <div key={m.id} className="text-sm leading-relaxed">
             <span className="font-medium text-[var(--color-accent)]">{m.username}</span>{' '}
-            <span className="break-words">{m.body}</span>
+            <span className="break-words text-[var(--color-text)]">{m.body}</span>
           </div>
         ))}
       </div>
@@ -492,23 +564,17 @@ function Chat() {
           value={body}
           onChange={(e) => setBody(e.target.value)}
           maxLength={500}
-          className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm"
+          className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
         />
         <button
           type="submit"
           disabled={!body.trim()}
-          className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-black disabled:opacity-60"
+          aria-label="Send message"
+          className="grid size-9 place-items-center rounded-full bg-[var(--color-accent)] text-[var(--color-accent-fg)] transition hover:bg-[var(--color-accent-hover)] disabled:opacity-40"
         >
-          Send
+          <Send size={14} />
         </button>
       </form>
     </section>
   );
 }
-
-const fmt = (s: number) => {
-  if (!Number.isFinite(s) || s < 0) return '0:00';
-  const m = Math.floor(s / 60);
-  const r = Math.floor(s % 60);
-  return `${m}:${r.toString().padStart(2, '0')}`;
-};

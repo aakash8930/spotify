@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/components/auth-provider';
+import { AuthLayout, Field } from '@/components/auth-layout';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,7 +26,7 @@ export default function LoginPage() {
     });
     setBusy(false);
     if (!res.ok) {
-      setErr('Invalid credentials');
+      setErr('Invalid email/username or password');
       return;
     }
     await refresh();
@@ -33,38 +34,51 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="mx-auto max-w-sm px-6 py-20">
-      <h1 className="text-3xl font-semibold tracking-tight">Welcome back</h1>
-      <p className="mt-2 text-sm text-[var(--color-muted)]">Log in to your library and rooms.</p>
-      <form onSubmit={submit} className="mt-8 flex flex-col gap-3">
-        <input
-          autoFocus
-          placeholder="Email or username"
+    <AuthLayout
+      title="Welcome back"
+      subtitle="Log in to your library and rooms."
+      footer={
+        <>
+          New here?{' '}
+          <Link href="/signup" className="text-[var(--color-accent)] hover:underline">
+            Create an account
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="mt-8 flex flex-col gap-4">
+        <Field
+          label="Email or username"
           value={emailOrUsername}
-          onChange={(e) => setId(e.target.value)}
-          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3"
+          onChange={setId}
+          autoFocus
+          autoComplete="username"
+          required
         />
-        <input
+        <Field
+          label="Password"
           type="password"
-          placeholder="Password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3"
+          onChange={setPassword}
+          autoComplete="current-password"
+          required
         />
-        {err && <p className="text-sm text-red-400">{err}</p>}
+        {err && (
+          <p
+            role="alert"
+            className="rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/10 px-3 py-2 text-sm text-[var(--color-danger)]"
+          >
+            {err}
+          </p>
+        )}
         <button
+          type="submit"
           disabled={busy}
-          className="mt-2 rounded-lg bg-[var(--color-accent)] py-3 font-medium text-black disabled:opacity-60"
+          className="mt-2 rounded-lg bg-[var(--color-accent)] py-2.5 text-sm font-medium text-[var(--color-accent-fg)] transition hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
         >
           {busy ? 'Logging in…' : 'Log in'}
         </button>
       </form>
-      <p className="mt-6 text-sm text-[var(--color-muted)]">
-        New here?{' '}
-        <Link href="/signup" className="text-[var(--color-accent)] hover:underline">
-          Create an account
-        </Link>
-      </p>
-    </main>
+    </AuthLayout>
   );
 }

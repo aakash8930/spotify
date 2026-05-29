@@ -1,8 +1,10 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import { CheckCircle2, FileAudio, UploadCloud, XCircle } from 'lucide-react';
 import type { Track } from '@resonate/shared/tracks';
 import { invalidate } from '@/lib/api';
+import { cn } from '@/lib/utils';
 
 type Item = {
   id: string;
@@ -68,13 +70,16 @@ export default function UploadPage() {
   };
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12">
-      <h1 className="text-3xl font-semibold tracking-tight">Upload</h1>
-      <p className="mt-2 text-sm text-[var(--color-muted)]">
-        MP3, FLAC, WAV, M4A, OGG. Up to 50 MB per file. We extract artwork and tags automatically.
+    <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+      <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Upload</h1>
+      <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+        MP3, FLAC, WAV, M4A, OGG. Up to 50 MB per file. We extract artwork and metadata
+        automatically.
       </p>
 
       <div
+        role="button"
+        tabIndex={0}
         onDragOver={(e) => {
           e.preventDefault();
           setDrag(true);
@@ -86,17 +91,26 @@ export default function UploadPage() {
           if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
         }}
         onClick={() => inputRef.current?.click()}
-        className={`mt-8 flex h-48 cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed transition ${
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
+        className={cn(
+          'mt-8 flex h-48 cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed transition-colors',
           drag
             ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/5'
-            : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-2)]'
-        }`}
+            : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-2)]',
+        )}
       >
         <div className="text-center">
-          <div className="text-2xl">↑</div>
-          <div className="mt-2 text-sm font-medium">Drop tracks here, or click to choose</div>
-          <div className="mt-1 text-xs text-[var(--color-muted)]">
-            Multiple files OK. We upload them in parallel.
+          <div className="mx-auto grid size-12 place-items-center rounded-full bg-[var(--color-surface-2)] text-[var(--color-text-muted)]">
+            <UploadCloud size={22} />
+          </div>
+          <div className="mt-3 text-sm font-medium">Drop tracks here, or click to choose</div>
+          <div className="mt-1 text-xs text-[var(--color-text-subtle)]">
+            Multiple files OK. Uploaded in parallel.
           </div>
         </div>
         <input
@@ -112,45 +126,59 @@ export default function UploadPage() {
         />
       </div>
 
-      <ul className="mt-8 space-y-2">
-        {items.map((i) => (
-          <li
-            key={i.id}
-            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-          >
-            <div className="flex items-center gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">
-                  {i.track?.title ?? i.file.name}
+      {items.length > 0 && (
+        <ul className="mt-8 space-y-2">
+          {items.map((i) => (
+            <li
+              key={i.id}
+              className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+            >
+              <div className="flex items-center gap-3">
+                <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-[var(--color-surface-2)] text-[var(--color-text-muted)]">
+                  {i.status === 'done' ? (
+                    <CheckCircle2 size={18} className="text-[var(--color-accent)]" />
+                  ) : i.status === 'error' ? (
+                    <XCircle size={18} className="text-[var(--color-danger)]" />
+                  ) : (
+                    <FileAudio size={18} />
+                  )}
                 </div>
-                <div className="truncate text-xs text-[var(--color-muted)]">
-                  {i.track ? `${i.track.artist}${i.track.album ? ` — ${i.track.album}` : ''}` : i.file.type || 'audio'}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">
+                    {i.track?.title ?? i.file.name}
+                  </div>
+                  <div className="truncate text-xs text-[var(--color-text-muted)]">
+                    {i.track
+                      ? `${i.track.artist}${i.track.album ? ` — ${i.track.album}` : ''}`
+                      : (i.file.size / 1024 / 1024).toFixed(1) + ' MB'}
+                  </div>
                 </div>
+                <span className="w-12 text-right text-xs tabular-nums text-[var(--color-text-muted)]">
+                  {i.status === 'uploading' && `${i.progress}%`}
+                  {i.status === 'done' && (
+                    <span className="text-[var(--color-accent)]">done</span>
+                  )}
+                  {i.status === 'error' && (
+                    <span className="text-[var(--color-danger)]">failed</span>
+                  )}
+                  {i.status === 'pending' && '…'}
+                </span>
               </div>
-              <span className="text-xs text-[var(--color-muted)]">
-                {(i.file.size / 1024 / 1024).toFixed(1)} MB
-              </span>
-              <span className="w-20 text-right text-xs">
-                {i.status === 'uploading' && `${i.progress}%`}
-                {i.status === 'done' && <span className="text-[var(--color-accent)]">done</span>}
-                {i.status === 'error' && <span className="text-red-400">failed</span>}
-                {i.status === 'pending' && '…'}
-              </span>
-            </div>
-            {(i.status === 'uploading' || i.status === 'pending') && (
-              <div className="mt-2 h-1 overflow-hidden rounded-full bg-[var(--color-surface-2)]">
-                <div
-                  className="h-full bg-[var(--color-accent)] transition-all"
-                  style={{ width: `${i.progress}%` }}
-                />
-              </div>
-            )}
-            {i.status === 'error' && i.error && (
-              <p className="mt-2 text-xs text-red-400">{i.error}</p>
-            )}
-          </li>
-        ))}
-      </ul>
+              {(i.status === 'uploading' || i.status === 'pending') && (
+                <div className="mt-2 h-1 overflow-hidden rounded-full bg-[var(--color-surface-2)]">
+                  <div
+                    className="h-full rounded-full bg-[var(--color-accent)] transition-all"
+                    style={{ width: `${i.progress}%` }}
+                  />
+                </div>
+              )}
+              {i.status === 'error' && i.error && (
+                <p className="mt-2 text-xs text-[var(--color-danger)]">{i.error}</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </main>
   );
 }

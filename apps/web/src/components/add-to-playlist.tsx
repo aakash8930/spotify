@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Plus, Check } from 'lucide-react';
 import type { Playlist } from '@resonate/shared/playlists';
 import { apiGet, apiSend, invalidate } from '@/lib/api';
+import { toast } from '@/components/ui/toaster';
+import { cn } from '@/lib/utils';
 
 export function AddToPlaylist({ trackId }: { trackId: string }) {
   const [open, setOpen] = useState(false);
@@ -25,23 +28,40 @@ export function AddToPlaylist({ trackId }: { trackId: string }) {
     const onClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
     document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onEsc);
+    };
   }, [open]);
 
-  const add = async (playlistId: string) => {
-    await apiSend(`/api/playlists/${playlistId}/tracks`, 'POST', { trackId });
-    invalidate(`/api/playlists/${playlistId}`);
-    invalidate('/api/playlists');
+  const add = async (playlist: Playlist) => {
+    try {
+      await apiSend(`/api/playlists/${playlist.id}/tracks`, 'POST', { trackId });
+      invalidate(`/api/playlists/${playlist.id}`);
+      invalidate('/api/playlists');
+      toast.success(`Added to “${playlist.name}”`);
+    } catch (e) {
+      toast.error('Could not add track', { description: (e as Error).message });
+    }
     setOpen(false);
   };
 
   const createAndAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    const res = await apiSend<{ playlist: Playlist }>('/api/playlists', 'POST', { name });
-    await apiSend(`/api/playlists/${res.playlist.id}/tracks`, 'POST', { trackId });
-    invalidate('/api/playlists');
+    try {
+      const res = await apiSend<{ playlist: Playlist }>('/api/playlists', 'POST', { name });
+      await apiSend(`/api/playlists/${res.playlist.id}/tracks`, 'POST', { trackId });
+      invalidate('/api/playlists');
+      toast.success(`Created “${res.playlist.name}” and added track`);
+    } catch (err) {
+      toast.error('Could not create playlist', { description: (err as Error).message });
+    }
     setName('');
     setCreating(false);
     setOpen(false);
@@ -56,55 +76,70 @@ export function AddToPlaylist({ trackId }: { trackId: string }) {
           setOpen((v) => !v);
         }}
         aria-label="Add to playlist"
-        className="text-[var(--color-muted)] transition hover:text-[var(--color-text)]"
+        aria-expanded={open}
+        className={cn(
+          'grid size-8 place-items-center rounded-full text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text)]',
+          'opacity-0 group-hover:opacity-100 focus:opacity-100 aria-expanded:opacity-100',
+        )}
       >
-        +
+        <Plus size={16} />
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-56 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2 shadow-xl">
-          <div className="px-2 py-1 text-xs uppercase tracking-wide text-[var(--color-muted)]">
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-50 mt-2 w-60 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-1.5 shadow-[var(--shadow-elevated)]"
+        >
+          <div className="px-2 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-subtle)]">
             Add to playlist
           </div>
-          {loading && <div className="px-2 py-3 text-sm text-[var(--color-muted)]">Loading…</div>}
+          {loading && (
+            <div className="px-2 py-3 text-sm text-[var(--color-text-muted)]">Loading…</div>
+          )}
           {!loading && playlists.length === 0 && !creating && (
-            <div className="px-2 py-3 text-sm text-[var(--color-muted)]">No playlists yet.</div>
+            <div className="px-2 py-3 text-sm text-[var(--color-text-muted)]">No playlists yet.</div>
           )}
           <div className="max-h-60 overflow-y-auto">
             {playlists.map((p) => (
               <button
                 key={p.id}
                 type="button"
-                onClick={() => add(p.id)}
-                className="block w-full truncate rounded-md px-2 py-1.5 text-left text-sm hover:bg-[var(--color-surface)]"
+                role="menuitem"
+                onClick={() => add(p)}
+                className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-left text-sm transition hover:bg-[var(--color-surface-3)]"
               >
-                {p.name}
+                <span className="min-w-0 truncate">{p.name}</span>
+                <span className="shrink-0 text-xs text-[var(--color-text-subtle)]">
+                  {p.trackCount}
+                </span>
               </button>
             ))}
           </div>
           <div className="mt-1 border-t border-[var(--color-border)] pt-1">
             {creating ? (
-              <form onSubmit={createAndAdd} className="flex gap-1 px-1 pt-1">
+              <form onSubmit={createAndAdd} className="flex items-center gap-1 p-1">
                 <input
                   autoFocus
                   placeholder="New playlist…"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm"
+                  className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm outline-none focus:border-[var(--color-accent)]"
                 />
                 <button
                   type="submit"
-                  className="rounded-md bg-[var(--color-accent)] px-2 py-1 text-sm font-medium text-black"
+                  aria-label="Create playlist and add"
+                  className="grid size-7 place-items-center rounded-md bg-[var(--color-accent)] text-[var(--color-accent-fg)]"
                 >
-                  +
+                  <Check size={14} />
                 </button>
               </form>
             ) : (
               <button
                 type="button"
                 onClick={() => setCreating(true)}
-                className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-[var(--color-accent)] hover:bg-[var(--color-surface)]"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-[var(--color-accent)] transition hover:bg-[var(--color-surface-3)]"
               >
-                + New playlist
+                <Plus size={14} />
+                New playlist
               </button>
             )}
           </div>

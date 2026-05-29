@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/components/auth-provider';
+import { AuthLayout, Field } from '@/components/auth-layout';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -35,45 +36,64 @@ export default function SignupPage() {
   };
 
   return (
-    <main className="mx-auto max-w-sm px-6 py-20">
-      <h1 className="text-3xl font-semibold tracking-tight">Create your account</h1>
-      <p className="mt-2 text-sm text-[var(--color-muted)]">Free, takes ten seconds.</p>
-      <form onSubmit={submit} className="mt-8 flex flex-col gap-3">
-        <input
-          autoFocus
+    <AuthLayout
+      title="Create your account"
+      subtitle="Free, takes ten seconds."
+      footer={
+        <>
+          Already have one?{' '}
+          <Link href="/login" className="text-[var(--color-accent)] hover:underline">
+            Log in
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="mt-8 flex flex-col gap-4">
+        <Field
+          label="Email"
           type="email"
-          placeholder="Email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3"
+          onChange={setEmail}
+          autoFocus
+          autoComplete="email"
+          required
         />
-        <input
-          placeholder="Username"
+        <Field
+          label="Username"
           value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3"
+          onChange={setUsername}
+          autoComplete="username"
+          required
+          placeholder="3–24 letters, numbers, underscores"
         />
-        <input
+        <Field
+          label="Password"
           type="password"
-          placeholder="Password (8+ chars)"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3"
+          onChange={setPassword}
+          autoComplete="new-password"
+          required
+          placeholder="At least 8 characters"
         />
-        {err && <p className="text-sm text-red-400">{err}</p>}
+        {err && (
+          <p
+            role="alert"
+            className="rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger)]/10 px-3 py-2 text-sm text-[var(--color-danger)]"
+          >
+            {err}
+          </p>
+        )}
         <button
+          type="submit"
           disabled={busy}
-          className="mt-2 rounded-lg bg-[var(--color-accent)] py-3 font-medium text-black disabled:opacity-60"
+          className="mt-2 rounded-lg bg-[var(--color-accent)] py-2.5 text-sm font-medium text-[var(--color-accent-fg)] transition hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
         >
           {busy ? 'Creating…' : 'Create account'}
         </button>
+        <p className="text-center text-xs text-[var(--color-text-subtle)]">
+          By signing up you agree this is a personal portfolio project, not a paid service.
+        </p>
       </form>
-      <p className="mt-6 text-sm text-[var(--color-muted)]">
-        Already have one?{' '}
-        <Link href="/login" className="text-[var(--color-accent)] hover:underline">
-          Log in
-        </Link>
-      </p>
-    </main>
+    </AuthLayout>
   );
 }

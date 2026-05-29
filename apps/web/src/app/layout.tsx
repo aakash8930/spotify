@@ -2,7 +2,8 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { PlayerShell } from '@/components/player-shell';
 import { AuthProvider } from '@/components/auth-provider';
-import { Sidebar } from '@/components/sidebar';
+import { Sidebar, MobileNav } from '@/components/sidebar';
+import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
   title: 'Resonate — listen together',
@@ -18,7 +19,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Sidebar />
             <div className="with-player-padding flex-1">{children}</div>
           </div>
+          <MobileNav />
           <PlayerShell />
+          <Toaster />
         </AuthProvider>
       </body>
     </html>
