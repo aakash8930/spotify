@@ -1,0 +1,31 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: oklch(0.14 0.02 264);
+  --color-surface: oklch(0.18 0.02 264);
+  --color-surface-2: oklch(0.22 0.025 264);
+  --color-border: oklch(0.28 0.02 264);
+  --color-text: oklch(0.97 0.005 264);
+  --color-muted: oklch(0.65 0.02 264);
+  --color-accent: oklch(0.72 0.18 168);
+  --color-accent-2: oklch(0.68 0.21 308);
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: var(--color-accent);
+  color: black;
+}
+
+/* Persistent player sits above the page; main content needs bottom space. */
+.with-player-padding {
+  padding-bottom: 6rem;
+}

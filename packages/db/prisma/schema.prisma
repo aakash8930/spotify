@@ -1,0 +1,194 @@
+// Resonate database schema
+// Conventions:
+// - All IDs are cuid2 strings (small, sortable, URL-safe)
+// - Timestamps use @default(now()) on create, @updatedAt on update where appropriate
+// - Cascading deletes are explicit only where the child has no meaning without parent
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users & sessions (Lucia-compatible shape) ────────────────────────────────
+
+model User {
+  id           String   @id
+  email        String   @unique
+  username     String   @unique
+  displayName  String?
+  avatarUrl    String?
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions       Session[]
+  uploadedTracks Track[]         @relation("UploadedBy")
+  playlists      Playlist[]
+  likes          Like[]
+  hostedRooms    Room[]          @relation("Host")
+  roomMembers    RoomMember[]
+  chatMessages   ChatMessage[]
+  queueItems     RoomQueueItem[]
+
+  @@index([email])
+  @@index([username])
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  expiresAt DateTime
+  user      User     @relation(references: [id], fields: [userId], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ─── Tracks ───────────────────────────────────────────────────────────────────
+//
+// A Track is the canonical playable unit. It can come from two sources:
+//   JAMENDO — externalId is the Jamendo track id, audioUrl points at their CDN
+//   UPLOAD  — uploadedById is the user, audioUrl points at our R2 bucket
+//
+// Source matters for permissions (only the uploader can delete an UPLOAD) and
+// licensing display (Jamendo tracks must show CC attribution).
+//
+// `source` is a string ('JAMENDO' | 'UPLOAD') rather than a Prisma enum
+// because SQLite doesn't support enums. Validation happens via the Zod
+// `TrackSource` schema in @resonate/shared.
+
+model Track {
+  id           String   @id
+  source       String
+  externalId   String?
+  title        String
+  artist       String
+  album        String?
+  durationSec  Int
+  coverUrl     String?
+  audioUrl     String
+  storageKey   String? // R2 object key for UPLOAD tracks; null for JAMENDO
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  uploadedBy     User?           @relation("UploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  playlistTracks PlaylistTrack[]
+  likes          Like[]
+  queueItems     RoomQueueItem[]
+
+  @@unique([source, externalId])
+  @@index([title])
+  @@index([artist])
+  @@index([uploadedById])
+}
+
+// ─── Playlists ────────────────────────────────────────────────────────────────
+
+model Playlist {
+  id          String   @id
+  name        String
+  description String?
+  coverUrl    String?
+  ownerId     String
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner  User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  tracks PlaylistTrack[]
+
+  @@index([ownerId])
+}
+
+model PlaylistTrack {
+  playlistId String
+  trackId    String
+  position   Int
+  addedAt    DateTime @default(now())
+
+  playlist Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  track    Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@id([playlistId, trackId])
+  @@index([playlistId, position])
+}
+
+model Like {
+  userId    String
+  trackId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@id([userId, trackId])
+  @@index([userId])
+}
+
+// ─── Listening rooms ──────────────────────────────────────────────────────────
+//
+// Playback state lives in Redis (hot path), not Postgres — these tables are
+// for membership, queue, and chat history persistence.
+
+model Room {
+  id        String   @id
+  code      String   @unique // 6-char shareable code
+  name      String
+  hostId    String
+  isPublic  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  closedAt  DateTime?
+
+  host     User            @relation("Host", fields: [hostId], references: [id], onDelete: Cascade)
+  members  RoomMember[]
+  queue    RoomQueueItem[]
+  messages ChatMessage[]
+
+  @@index([code])
+  @@index([isPublic, closedAt])
+}
+
+model RoomMember {
+  roomId   String
+  userId   String
+  joinedAt DateTime @default(now())
+  leftAt   DateTime?
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([roomId, userId])
+  @@index([userId])
+}
+
+model RoomQueueItem {
+  id        String   @id
+  roomId    String
+  trackId   String
+  addedById String
+  position  Int
+  playedAt  DateTime?
+
+  room  Room  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [addedById], references: [id], onDelete: Cascade)
+
+  @@index([roomId, position])
+}
+
+model ChatMessage {
+  id        String   @id
+  roomId    String
+  userId    String
+  body      String
+  createdAt DateTime @default(now())
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, createdAt])
+}

@@ -1,0 +1,25 @@
+{
+  "name": "resonate",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Resonate — a music platform with listening rooms",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "db:push": "pnpm --filter @resonate/db db:push",
+    "db:studio": "pnpm --filter @resonate/db db:studio",
+    "db:generate": "pnpm --filter @resonate/db generate",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}
